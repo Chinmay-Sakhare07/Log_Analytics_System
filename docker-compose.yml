@@ -1,0 +1,151 @@
+# Rationale: Named network so all services resolve each other by container name
+networks:
+  log_net:
+    driver: bridge
+
+# Rationale: Named volumes persist DB data across docker compose restarts
+volumes:
+  cassandra_data:
+  postgres_data:
+
+services:
+
+  # ─── Cassandra ────────────────────────────────────────────────────────────
+  cassandra:
+    image: cassandra:4.1
+    container_name: cassandra
+    ports:
+      - "9042:9042"
+    environment:
+      CASSANDRA_CLUSTER_NAME: log_cluster
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      MAX_HEAP_SIZE: "512M"
+      HEAP_NEWSIZE: "100M"
+    volumes:
+      - cassandra_data:/var/lib/cassandra
+    networks:
+      - log_net
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
+  # ─── PostgreSQL ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: loguser
+      POSTGRES_PASSWORD: logpass
+      POSTGRES_DB: logdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - log_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U loguser -d logdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Cassandra Schema Init ────────────────────────────────────────────────
+  cassandra_init:
+    image: cassandra:4.1
+    container_name: cassandra_init
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    networks:
+      - log_net
+    volumes:
+      - ./db:/db
+    entrypoint: >
+      bash -c "
+        echo 'Waiting for Cassandra to be fully ready...';
+        until cqlsh cassandra 9042 -e 'DESCRIBE KEYSPACES' > /dev/null 2>&1; do
+          echo 'Retrying in 5s...';
+          sleep 5;
+        done;
+        echo 'Running schema init...';
+        cqlsh cassandra 9042 -f /db/cassandra_schema.cql;
+        echo 'Cassandra schema applied.';
+      "
+    restart: on-failure
+
+  # ─── Postgres Schema Init ─────────────────────────────────────────────────
+  postgres_init:
+    image: postgres:15-alpine
+    container_name: postgres_init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - log_net
+    volumes:
+      - ./db:/db
+    environment:
+      PGPASSWORD: logpass
+    entrypoint: >
+      sh -c "
+        echo 'Running Postgres schema init...';
+        psql -h postgres -U loguser -d logdb -f /db/postgres_schema.sql;
+        echo 'Postgres schema applied.';
+      "
+    restart: on-failure
+
+  # ─── Ingestion API ────────────────────────────────────────────────────────
+  ingestion_api:
+    build:
+      context: ./ingestion_api
+      dockerfile: Dockerfile
+    container_name: ingestion_api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      CASSANDRA_HOST: cassandra
+      POSTGRES_DSN: postgresql://loguser:logpass@postgres:5432/logdb
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      cassandra_init:
+        condition: service_completed_successfully
+      postgres_init:
+        condition: service_completed_successfully
+    networks:
+      - log_net
+    restart: on-failure
+
+  # ─── Query API ────────────────────────────────────────────────────────────
+  query_api:
+    build:
+      context: ./query_api
+      dockerfile: Dockerfile
+    container_name: query_api
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      CASSANDRA_HOST: cassandra
+      POSTGRES_DSN: postgresql://loguser:logpass@postgres:5432/logdb
+    depends_on:
+      cassandra:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      cassandra_init:
+        condition: service_completed_successfully
+      postgres_init:
+        condition: service_completed_successfully
+    networks:
+      - log_net
+    restart: on-failure

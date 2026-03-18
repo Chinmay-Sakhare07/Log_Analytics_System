@@ -1,0 +1,113 @@
+# ============================================================
+# Makefile — Distributed Log Analytics System
+# Usage: make <target>
+# ============================================================
+
+.PHONY: up down logs test lint seed produce ship clean help
+
+# ─── Local Dev ───────────────────────────────────────────────
+
+## Bring up all services (builds images if needed)
+up:
+	docker compose up -d --build
+	@echo "Services starting. Cassandra takes ~60s to be ready."
+	@echo "Ingestion API → http://localhost:8000/docs"
+	@echo "Query API     → http://localhost:8001/docs"
+
+## Stop all services (keeps volumes)
+down:
+	docker compose down
+
+## Tail logs from all containers
+logs:
+	docker compose logs -f
+
+## Tail logs from a specific service: make logs-ingestion
+logs-%:
+	docker compose logs -f $*
+
+## Remove all containers AND volumes (full reset)
+clean:
+	docker compose down -v --remove-orphans
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -name "*.pyc" -delete 2>/dev/null || true
+	rm -rf logs/*.log shipper_buffer.jsonl
+
+# ─── Testing ─────────────────────────────────────────────────
+
+## Run all tests (unit + integration)
+test:
+	pytest tests/ -v --tb=short
+
+## Run unit tests only (no Docker required)
+test-unit:
+	pytest tests/unit_tests/ -v --tb=short
+
+## Run integration tests (requires docker compose up first)
+test-integration:
+	pytest tests/integration_test.py -v --tb=short -s
+
+# ─── Code Quality ────────────────────────────────────────────
+
+## Lint all Python files
+lint:
+	flake8 ingestion_api/ query_api/ log_producer/ log_shipper/ cli/ tests/ \
+		--max-line-length=100 --ignore=E501,W503
+	@echo "Lint passed."
+
+## Format all Python files (black)
+fmt:
+	black ingestion_api/ query_api/ log_producer/ log_shipper/ cli/ tests/ --line-length 100
+
+# ─── Simulation ──────────────────────────────────────────────
+
+## Generate sample log files (runs for 30 seconds by default)
+produce:
+	python log_producer/generate_logs.py --duration 30 --output-dir ./logs
+
+## Run log shipper (reads ./logs, sends to ingestion API)
+ship:
+	python log_shipper/shipper.py --config log_shipper/config.yaml
+
+## One-shot: produce + ship + query (smoke test)
+smoke:
+	@echo "Step 1: Generating logs for 10 seconds..."
+	python log_producer/generate_logs.py --duration 10 --output-dir ./logs
+	@echo "Step 2: Shipping logs to ingestion API..."
+	python log_shipper/shipper.py --config log_shipper/config.yaml --once
+	@echo "Step 3: Querying search endpoint..."
+	curl -s "http://localhost:8001/logs/search?limit=5" \
+		-H "X-API-Key: $${QUERY_API_KEY:-dev-secret-key-change-in-prod}" | python -m json.tool
+
+# ─── Database ────────────────────────────────────────────────
+
+## Manually re-apply Cassandra schema (useful after make clean)
+schema-cassandra:
+	docker exec cassandra cqlsh cassandra 9042 -f /schema.cql
+
+## Connect to Postgres REPL
+psql:
+	docker exec -it postgres psql -U loguser -d logdb
+
+## Connect to Cassandra REPL
+cqlsh:
+	docker exec -it cassandra cqlsh
+
+# ─── Help ────────────────────────────────────────────────────
+
+help:
+	@echo ""
+	@echo "  make up               Bring up all Docker services"
+	@echo "  make down             Stop services (keep data)"
+	@echo "  make clean            Full reset (delete volumes)"
+	@echo "  make test             Run all tests"
+	@echo "  make test-unit        Unit tests only"
+	@echo "  make test-integration Integration tests (needs Docker up)"
+	@echo "  make lint             Flake8 lint check"
+	@echo "  make fmt              Black format"
+	@echo "  make produce          Generate sample log files"
+	@echo "  make ship             Run log shipper"
+	@echo "  make smoke            End-to-end smoke test"
+	@echo "  make psql             Postgres REPL"
+	@echo "  make cqlsh            Cassandra REPL"
+	@echo ""

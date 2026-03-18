@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+logs/
+shipper_buffer.jsonl
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
