@@ -2,10 +2,13 @@
 # All values can be overridden by environment variables (see shipper.py)
 
 ingestion:
-  url: "http://localhost:8000"       # Change to cloud URL for production
-  api_key: "dev-secret-key-change-in-prod"
-  endpoint: "/ingest"
-  timeout_secs: 10
+  url: "https://log-analytics-ingestion.onrender.com"
+  api_key: "log-analytics-secret-2026"
+  batch_size: 100
+  retry:
+    max_attempts: 6
+    base_delay: 1
+    max_delay: 60
 
 batching:
   batch_size: 100                    # Max events per HTTP request
