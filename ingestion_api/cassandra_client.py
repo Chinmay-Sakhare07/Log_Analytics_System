@@ -23,13 +23,11 @@ _insert_stmt: Optional[PreparedStatement] = None
 
 
 def get_session() -> Session:
-    """Return the cached Astra DB session, initializing if needed."""
     global _cluster, _session, _insert_stmt
-
     if _session is not None:
         return _session
 
-    bundle_path = os.getenv("ASTRA_SECURE_BUNDLE_PATH", "/app/secure-connect-bundle.zip")
+    bundle_path = os.getenv("ASTRA_SECURE_BUNDLE_PATH")
     client_id = os.getenv("ASTRA_CLIENT_ID")
     client_secret = os.getenv("ASTRA_CLIENT_SECRET")
     keyspace = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
@@ -43,18 +41,15 @@ def get_session() -> Session:
         default_retry_policy=RetryPolicy(),
         connect_timeout=30,
     )
-
     _session = _cluster.connect(keyspace)
     logger.info("Astra DB session established → keyspace=%s", keyspace)
-
+    
     _insert_stmt = _session.prepare("""
         INSERT INTO logs_by_service_date
             (service_name, log_date, timestamp, log_uuid, severity, message, host, metadata)
-        VALUES
-            (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     """)
     _insert_stmt.consistency_level = 1
-
     return _session
 
 
