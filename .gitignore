@@ -7,3 +7,6 @@ shipper_buffer.jsonl
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
+
+ingestion_api/secure-connect-bundle.zip
+query_api/secure-connect-bundle.zip
