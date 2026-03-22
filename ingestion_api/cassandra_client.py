@@ -1,6 +1,6 @@
 """
 cassandra_client.py
-Handles all reads/writes to Cassandra via Astra DB.
+Handles all reads/writes to Astra DB via token-based auth (no bundle file).
 """
 
 import logging
@@ -9,11 +9,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+import requests
 from cassandra.cluster import Cluster, Session
 from cassandra.auth import PlainTextAuthProvider
-from cassandra.policies import DCAwareRoundRobinPolicy, RetryPolicy
+from cassandra.policies import RetryPolicy
 from cassandra.query import BatchStatement, BatchType, PreparedStatement
-from cassandra_driver import datastax
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +23,37 @@ _insert_stmt: Optional[PreparedStatement] = None
 
 
 def get_session() -> Session:
+    """Return the cached Astra DB session using token auth."""
     global _cluster, _session, _insert_stmt
+
     if _session is not None:
         return _session
 
-    bundle_path = os.getenv("ASTRA_SECURE_BUNDLE_PATH")
-    client_id = os.getenv("ASTRA_CLIENT_ID")
-    client_secret = os.getenv("ASTRA_CLIENT_SECRET")
+    # Astra DB token auth — no secure bundle needed
+    # ASTRA_DB_ID:      the database UUID from the Astra dashboard URL
+    # ASTRA_DB_REGION:  e.g. eu-west-2
+    # ASTRA_TOKEN:      starts with AstraCS:...
+    db_id = os.getenv("ASTRA_DB_ID")
+    region = os.getenv("ASTRA_DB_REGION")
+    token = os.getenv("ASTRA_TOKEN")
     keyspace = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
 
-    cloud_config = {"secure_connect_bundle": bundle_path}
-    auth = PlainTextAuthProvider(client_id, client_secret)
+    # Astra DB endpoint format for token-based driver connection
+    host = f"{db_id}-{region}.db.astra.datastax.com"
+
+    auth = PlainTextAuthProvider("token", token)
 
     _cluster = Cluster(
-        cloud=cloud_config,
+        cloud={"secure_connect_bundle": None},
+        contact_points=[host],
+        port=29042,
         auth_provider=auth,
         default_retry_policy=RetryPolicy(),
         connect_timeout=30,
     )
     _session = _cluster.connect(keyspace)
-    logger.info("Astra DB session established → keyspace=%s", keyspace)
-    
+    logger.info("Astra DB session established → %s / keyspace=%s", host, keyspace)
+
     _insert_stmt = _session.prepare("""
         INSERT INTO logs_by_service_date
             (service_name, log_date, timestamp, log_uuid, severity, message, host, metadata)
@@ -54,9 +64,6 @@ def get_session() -> Session:
 
 
 def insert_log_batch(events: list[dict]) -> int:
-    """
-    Write a batch of log events to Astra DB in chunks of 50.
-    """
     session = get_session()
     CHUNK_SIZE = 50
     total_written = 0
@@ -111,8 +118,7 @@ def search_logs(
         SELECT service_name, log_date, timestamp, log_uuid,
                severity, message, host, metadata
         FROM logs_by_service_date
-        WHERE service_name = %s
-          AND log_date = %s
+        WHERE service_name = %s AND log_date = %s
     """
     params: list = [service, log_date]
 

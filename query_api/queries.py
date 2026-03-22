@@ -25,21 +25,22 @@ def get_cassandra_session() -> Session:
     if _session:
         return _session
 
-    bundle_path = os.getenv("ASTRA_SECURE_BUNDLE_PATH", "/app/secure-connect-bundle.zip")
-    client_id = os.getenv("ASTRA_CLIENT_ID")
-    client_secret = os.getenv("ASTRA_CLIENT_SECRET")
+    db_id = os.getenv("ASTRA_DB_ID")
+    region = os.getenv("ASTRA_DB_REGION")
+    token = os.getenv("ASTRA_TOKEN")
     keyspace = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
 
-    cloud_config = {"secure_connect_bundle": bundle_path}
-    auth = PlainTextAuthProvider(client_id, client_secret)
+    host = f"{db_id}-{region}.db.astra.datastax.com"
+    auth = PlainTextAuthProvider("token", token)
 
     _cluster = Cluster(
-        cloud=cloud_config,
+        contact_points=[host],
+        port=29042,
         auth_provider=auth,
         connect_timeout=30,
     )
     _session = _cluster.connect(keyspace)
-    logger.info("Query API: Astra DB session ready → keyspace=%s", keyspace)
+    logger.info("Query API: Astra DB session ready → %s", host)
     return _session
 
 
