@@ -19,6 +19,9 @@ COPY . .
 
 EXPOSE 8001
 
+
+COPY secure-connect-log-analytics.zip /app/secure-connect-log-analytics.zip
+
 # Rationale: Port 8001 keeps query API separate from ingestion (8000)
 # so they can be scaled and secured independently
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]

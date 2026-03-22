@@ -26,6 +26,8 @@ COPY . .
 
 EXPOSE 8000
 
+COPY secure-connect-log-analytics.zip /app/secure-connect-log-analytics.zip
+
 # Rationale: --host 0.0.0.0 binds to all interfaces inside the container
 # so Docker can forward traffic from the host machine
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

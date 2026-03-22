@@ -1,8 +1,6 @@
 """
 cassandra_client.py
-Handles all reads/writes to Cassandra (or ScyllaDB).
-Rationale: Isolated in its own module so the app layer
-never constructs CQL directly — all queries live here.
+Handles all reads/writes to Cassandra via Astra DB.
 """
 
 import logging
@@ -15,75 +13,57 @@ from cassandra.cluster import Cluster, Session
 from cassandra.auth import PlainTextAuthProvider
 from cassandra.policies import DCAwareRoundRobinPolicy, RetryPolicy
 from cassandra.query import BatchStatement, BatchType, PreparedStatement
+from cassandra_driver import datastax
 
 logger = logging.getLogger(__name__)
 
-# ─── Module-level singletons ──────────────────────────────────────────────────
-# Rationale: One Cluster + Session per process; creating a new Cluster
-# per request is expensive (TCP handshake + schema negotiation).
 _cluster: Optional[Cluster] = None
 _session: Optional[Session] = None
-
-# Prepared statements cached at startup
-# Rationale: Cassandra parses and plans prepared statements once;
-# re-using them avoids per-request parsing overhead.
 _insert_stmt: Optional[PreparedStatement] = None
 
 
 def get_session() -> Session:
-    """Return the cached Cassandra session, initializing if needed."""
+    """Return the cached Astra DB session, initializing if needed."""
     global _cluster, _session, _insert_stmt
 
     if _session is not None:
         return _session
 
-    host = os.getenv("CASSANDRA_HOST", "cassandra")
-    port = int(os.getenv("CASSANDRA_PORT", "9042"))
+    bundle_path = os.getenv("ASTRA_SECURE_BUNDLE_PATH", "/app/secure-connect-bundle.zip")
+    client_id = os.getenv("ASTRA_CLIENT_ID")
+    client_secret = os.getenv("ASTRA_CLIENT_SECRET")
     keyspace = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
-    username = os.getenv("SCYLLA_USERNAME", "")
-    password = os.getenv("SCYLLA_PASSWORD", "")
-    datacenter = os.getenv("SCYLLA_DATACENTER", "datacenter1")
 
-    # Auth is only set when using ScyllaDB Cloud (username present)
-    auth = PlainTextAuthProvider(username, password) if username else None
+    cloud_config = {"secure_connect_bundle": bundle_path}
+    auth = PlainTextAuthProvider(client_id, client_secret)
 
     _cluster = Cluster(
-        contact_points=[host],
-        port=port,
+        cloud=cloud_config,
         auth_provider=auth,
-        # Rationale: DCAwareRoundRobinPolicy routes queries to local DC first,
-        # reducing cross-DC latency. Required for ScyllaDB Cloud multi-DC.
-        load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=datacenter),
         default_retry_policy=RetryPolicy(),
         connect_timeout=30,
     )
 
     _session = _cluster.connect(keyspace)
-    logger.info("Cassandra session established → %s:%s / keyspace=%s", host, port, keyspace)
+    logger.info("Astra DB session established → keyspace=%s", keyspace)
 
-    # Prepare INSERT statement once at startup
     _insert_stmt = _session.prepare("""
         INSERT INTO logs_by_service_date
             (service_name, log_date, timestamp, log_uuid, severity, message, host, metadata)
         VALUES
             (?, ?, ?, ?, ?, ?, ?, ?)
     """)
-    # Rationale: QUORUM consistency ensures at least 2 replicas acknowledge
-    # the write in a 3-node cluster. For local single-node dev, ONE is used.
-    _insert_stmt.consistency_level = 1  # ConsistencyLevel.ONE for local dev
+    _insert_stmt.consistency_level = 1
 
     return _session
 
 
 def insert_log_batch(events: list[dict]) -> int:
     """
-    Write a batch of log events to Cassandra in chunks of 50.
-    Rationale: Cassandra enforces a batch size limit (default 5KB warning,
-    hard limit ~50KB). Chunking to 50 events keeps each batch well under
-    the limit regardless of message size.
+    Write a batch of log events to Astra DB in chunks of 50.
     """
     session = get_session()
-    CHUNK_SIZE = 50  # Safe limit well under Cassandra's batch threshold
+    CHUNK_SIZE = 50
     total_written = 0
 
     for i in range(0, len(events), CHUNK_SIZE):
@@ -114,9 +94,9 @@ def insert_log_batch(events: list[dict]) -> int:
         try:
             session.execute(batch)
             total_written += len(chunk)
-            logger.debug("Wrote chunk of %d events to Cassandra", len(chunk))
+            logger.debug("Wrote chunk of %d events to Astra DB", len(chunk))
         except Exception as exc:
-            logger.error("Cassandra batch write failed: %s", exc)
+            logger.error("Astra DB batch write failed: %s", exc)
             raise
 
     return total_written
@@ -124,20 +104,14 @@ def insert_log_batch(events: list[dict]) -> int:
 
 def search_logs(
     service: str,
-    log_date: str,             # "YYYY-MM-DD"
+    log_date: str,
     severity: Optional[str] = None,
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     limit: int = 50,
 ) -> list[dict]:
-    """
-    Query raw log events for a service on a specific date.
-    Rationale: Partition key (service_name, log_date) is always required
-    to avoid a full table scan (ALLOW FILTERING is deliberately not used).
-    """
     session = get_session()
 
-    # Build CQL dynamically based on optional filters
     cql = """
         SELECT service_name, log_date, timestamp, log_uuid,
                severity, message, host, metadata
@@ -176,7 +150,6 @@ def search_logs(
 
 
 def close() -> None:
-    """Cleanly shut down the Cassandra cluster connection."""
     global _cluster, _session
     if _cluster:
         _cluster.shutdown()

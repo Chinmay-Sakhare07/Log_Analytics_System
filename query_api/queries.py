@@ -1,7 +1,5 @@
 """
 queries.py — All DB query logic for the Query API.
-Rationale: Keeping queries isolated from the route layer means
-you can unit-test query logic without spinning up FastAPI.
 """
 
 import base64
@@ -18,7 +16,6 @@ from cassandra.policies import DCAwareRoundRobinPolicy
 
 logger = logging.getLogger(__name__)
 
-# ─── Cassandra session (same singleton pattern as ingestion_api) ──────────────
 _cluster = None
 _session = None
 
@@ -28,23 +25,21 @@ def get_cassandra_session() -> Session:
     if _session:
         return _session
 
-    host = os.getenv("CASSANDRA_HOST", "cassandra")
-    port = int(os.getenv("CASSANDRA_PORT", "9042"))
+    bundle_path = os.getenv("ASTRA_SECURE_BUNDLE_PATH", "/app/secure-connect-bundle.zip")
+    client_id = os.getenv("ASTRA_CLIENT_ID")
+    client_secret = os.getenv("ASTRA_CLIENT_SECRET")
     keyspace = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
-    username = os.getenv("SCYLLA_USERNAME", "")
-    password = os.getenv("SCYLLA_PASSWORD", "")
-    datacenter = os.getenv("SCYLLA_DATACENTER", "datacenter1")
 
-    auth = PlainTextAuthProvider(username, password) if username else None
+    cloud_config = {"secure_connect_bundle": bundle_path}
+    auth = PlainTextAuthProvider(client_id, client_secret)
+
     _cluster = Cluster(
-        contact_points=[host],
-        port=port,
+        cloud=cloud_config,
         auth_provider=auth,
-        load_balancing_policy=DCAwareRoundRobinPolicy(local_dc=datacenter),
         connect_timeout=30,
     )
     _session = _cluster.connect(keyspace)
-    logger.info("Query API: Cassandra session ready → %s:%s", host, port)
+    logger.info("Query API: Astra DB session ready → keyspace=%s", keyspace)
     return _session
 
 
@@ -56,16 +51,13 @@ async def get_pg_pool() -> asyncpg.Pool:
     global _pool
     if _pool:
         return _pool
-    dsn = os.getenv("POSTGRES_DSN", "postgresql://loguser:logpass@postgres:5432/logdb")
+    dsn = os.getenv("POSTGRES_DSN")
     _pool = await asyncpg.create_pool(dsn=dsn, min_size=2, max_size=10)
     logger.info("Query API: Postgres pool ready")
     return _pool
 
 
 # ─── Page token helpers ───────────────────────────────────────────────────────
-# Rationale: Cursor pagination avoids OFFSET (which scans and discards rows).
-# We encode (timestamp, uuid) as a base64 JSON string — opaque to the client.
-
 def encode_page_token(ts: datetime, uuid_str: str) -> str:
     payload = json.dumps({"ts": ts.isoformat(), "uuid": uuid_str})
     return base64.urlsafe_b64encode(payload.encode()).decode()
@@ -77,7 +69,6 @@ def decode_page_token(token: str) -> tuple[datetime, str]:
 
 
 # ─── Query: search logs ───────────────────────────────────────────────────────
-
 def search_logs(
     service: str,
     start: Optional[datetime] = None,
@@ -87,34 +78,19 @@ def search_logs(
     limit: int = 50,
     page_token: Optional[str] = None,
 ) -> dict:
-    """
-    Search raw logs from Cassandra.
-
-    Design constraints:
-    - service is required (partition key; no full-table scan)
-    - date range is derived from start/end; defaults to today
-    - keyword search (q) is done in Python after fetch — Cassandra has
-      no full-text index. Acceptable for log analytics at this scale;
-      Elasticsearch would be used in production for keyword search.
-    """
     session = get_cassandra_session()
 
-    # Determine which dates to query
-    # Rationale: logs are partitioned by date, so a multi-day range
-    # requires one query per date. We iterate dates in the range.
     if start is None:
         start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     if end is None:
         end = datetime.now(timezone.utc)
 
-    # Collect all dates in range (inclusive)
     dates: list[date] = []
     cur = start.date()
     while cur <= end.date():
         dates.append(cur)
         cur += timedelta(days=1)
 
-    # Decode cursor for pagination
     cursor_ts, cursor_uuid = None, None
     if page_token:
         cursor_ts, cursor_uuid = decode_page_token(page_token)
@@ -141,7 +117,6 @@ def search_logs(
             cql += " AND severity = %s"
             params.append(severity.upper())
 
-        # Cursor: skip rows before (cursor_ts, cursor_uuid)
         if cursor_ts and log_date == cursor_ts.date():
             cql += " AND (timestamp, log_uuid) < (%s, %s)"
             params.extend([cursor_ts, cursor_uuid])
@@ -160,7 +135,6 @@ def search_logs(
                 "host": r.host,
                 "metadata": dict(r.metadata) if r.metadata else {},
             }
-            # Keyword filter in Python (post-fetch)
             if q and q.lower() not in r.message.lower():
                 continue
             results.append(event)
@@ -170,7 +144,6 @@ def search_logs(
 
     results = results[:limit]
 
-    # Build next page token from last result
     next_token = None
     if len(results) == limit:
         last = results[-1]
@@ -182,13 +155,11 @@ def search_logs(
 
 
 # ─── Query: stats ─────────────────────────────────────────────────────────────
-
 async def get_stats(
     service: Optional[str],
     start: Optional[datetime],
     end: Optional[datetime],
 ) -> list[dict]:
-    """Fetch hourly severity counts from Postgres log_aggregates."""
     pool = await get_pg_pool()
 
     query = """
@@ -227,9 +198,7 @@ async def get_stats(
 
 
 # ─── Query: services ──────────────────────────────────────────────────────────
-
 async def get_services() -> list[dict]:
-    """Return all known services from the service_registry table."""
     pool = await get_pg_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch("""
@@ -249,7 +218,6 @@ async def get_services() -> list[dict]:
 
 
 # ─── Cleanup ──────────────────────────────────────────────────────────────────
-
 async def close_all() -> None:
     global _cluster, _pool
     if _cluster:
