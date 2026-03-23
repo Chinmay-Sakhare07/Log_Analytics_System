@@ -28,7 +28,7 @@ logger = logging.getLogger("query_api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Query API — warming up DB connections...")
-    query_engine.get_cassandra_session()
+    query_engine.get_astra_session()
     await query_engine.get_pg_pool()
     logger.info("Query API ready.")
     yield
@@ -67,15 +67,6 @@ async def search(
     page_token: Optional[str] = Query(None, description="Cursor from previous response"),
     _key: str = Security(verify_key),
 ):
-    """
-    Search raw log events for a service.
-    - **service** is required (Cassandra partition key constraint).
-    - Use **page_token** from the previous response to paginate.
-
-    Example curl:
-        curl "http://localhost:8001/logs/search?service=auth-service&severity=ERROR&limit=10" \\
-             -H "X-API-Key: dev-secret-key-change-in-prod"
-    """
     try:
         result = query_engine.search_logs(
             service=service,

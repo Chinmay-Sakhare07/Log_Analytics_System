@@ -1,6 +1,6 @@
 """
 app.py — Ingestion API
-Accepts log events from shippers, writes raw events to Cassandra,
+Accepts log events from shippers, writes raw events to Astra,
 and upserts hourly aggregates to PostgreSQL.
 """
 
@@ -43,8 +43,6 @@ INGEST_LATENCY = Histogram("ingest_latency_seconds", "Ingest request latency")
 async def lifespan(app: FastAPI):
     """Initialize DB connections on startup; close cleanly on shutdown."""
     logger.info("Starting Ingestion API — initializing DB connections...")
-    # Cassandra uses a sync driver; warm up the session now so first
-    # request doesn't pay the 1-2s connection cost
     astra_client.get_collection()
     await postgres_client.get_pool()
     logger.info("DB connections ready.")
@@ -57,7 +55,7 @@ async def lifespan(app: FastAPI):
 # ─── App ─────────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Log Analytics — Ingestion API",
-    description="Accepts log events from shippers and writes to Cassandra + PostgreSQL.",
+    description="Accepts log events from shippers and writes to Astra + PostgreSQL.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -118,7 +116,7 @@ async def ingest(
 ):
     """
     Accept a single event or a batch (list) of log events.
-    Writes raw events to Cassandra and upserts aggregates to Postgres.
+    Writes raw events to Astra and upserts aggregates to Postgres.
 
     Example curl:
         curl -X POST http://localhost:8000/ingest \\
@@ -137,8 +135,8 @@ async def ingest(
     event_dicts = [e.model_dump() for e in events]
 
     try:
-        # Write raw logs to Cassandra
-        written = cassandra_client.insert_log_batch(event_dicts)
+        # Write raw logs to Astra DB
+        written = astra_client.insert_log_batch(event_dicts)
 
         # Upsert aggregates + service registry to Postgres
         await postgres_client.upsert_aggregates(event_dicts)

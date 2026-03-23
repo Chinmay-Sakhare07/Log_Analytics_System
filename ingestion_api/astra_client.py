@@ -1,7 +1,7 @@
 """
 astra_client.py
 Handles all writes to Astra DB via astrapy SDK.
-Token-only auth — no secure bundle, no cassandra-driver, no port 9142.
+Token-only auth — no secure bundle, no Astra-driver, no port 9142.
 """
 
 import logging

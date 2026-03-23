@@ -39,14 +39,14 @@ def get_astra_collection() -> Collection:
 
     endpoint = f"https://{ASTRA_DB_ID}-{ASTRA_DB_REGION}.apps.astra.datastax.com"
     client = DataAPIClient(ASTRA_TOKEN)
-    db = client.get_database(endpoint, keyspace=CASSANDRA_KEYSPACE)
+    db = client.get_database(endpoint, keyspace=ASTRA_KEYSPACE)
     _collection = db.get_collection("logs_by_service_date")
     logger.info("Query API: Astra DB collection ready → %s", endpoint)
     return _collection
 
 
 # Kept for lifespan compatibility with app.py
-def get_cassandra_session():
+def get_astra_session():
     return get_astra_collection()
 
 

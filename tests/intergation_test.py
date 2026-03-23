@@ -120,8 +120,8 @@ class TestIngestion:
 
 
 class TestQuery:
-    # Rationale: sleep gives Cassandra time to make the write visible.
-    # In production, reads after writes are eventually consistent in Cassandra.
+    # Rationale: sleep gives Astra time to make the write visible.
+    # In production, reads after writes are eventually consistent in Astra.
     @pytest.fixture(autouse=True)
     def ingest_test_data(self, wait_for_services):
         """Ingest known events before each query test."""
@@ -142,7 +142,7 @@ class TestQuery:
             },
         ]
         post("/ingest", events)
-        time.sleep(2)  # Wait for Cassandra write to be readable
+        time.sleep(2)  # Wait for Astra write to be readable
 
     def test_health_query(self):
         result = get(QUERY_URL, "/health")
