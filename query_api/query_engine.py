@@ -17,7 +17,7 @@ from astrapy.collection import Collection
 
 logger = logging.getLogger(__name__)
 
-CASSANDRA_KEYSPACE = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
+ASTRA_KEYSPACE = os.getenv("ASTRA_KEYSPACE", "log_analytics")
 ASTRA_TOKEN = os.getenv("ASTRA_TOKEN")
 ASTRA_DB_ID = os.getenv("ASTRA_DB_ID")
 ASTRA_DB_REGION = os.getenv("ASTRA_DB_REGION")

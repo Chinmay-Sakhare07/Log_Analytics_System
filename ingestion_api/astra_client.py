@@ -27,7 +27,7 @@ def get_collection() -> Collection:
     token = os.getenv("ASTRA_TOKEN")
     db_id = os.getenv("ASTRA_DB_ID")
     region = os.getenv("ASTRA_DB_REGION")
-    keyspace = os.getenv("CASSANDRA_KEYSPACE", "log_analytics")
+    keyspace = os.getenv("ASTRA_KEYSPACE", "log_analytics")
 
     if not all([token, db_id, region]):
         raise RuntimeError("ASTRA_TOKEN, ASTRA_DB_ID, and ASTRA_DB_REGION must all be set")
