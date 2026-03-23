@@ -1,7 +1,7 @@
 """
 astra_client.py
 Handles all writes to Astra DB via astrapy SDK.
-Token-only auth — no secure bundle, no Astra-driver, no port 9142.
+Token-only auth is used, so no connection pooling or session management is needed.
 """
 
 import logging
@@ -60,10 +60,10 @@ def insert_log_batch(events: list[dict]) -> int:
                 ts = ts.replace(tzinfo=timezone.utc)
 
             docs.append({
-                "_id": str(uuid.uuid4()),
                 "service_name": evt["service"],
                 "log_date": ts.date().isoformat(),
                 "timestamp": ts.isoformat(),
+                "log_uuid": str(uuid.uuid4()),
                 "severity": evt["severity"].upper(),
                 "message": evt["message"],
                 "host": evt.get("host", "unknown"),
