@@ -1,7 +1,7 @@
 """
 app.py — Query API
 Exposes search, stats, and services endpoints.
-All heavy lifting is in queries.py; this file is purely routing.
+All heavy lifting is in query_engine.py; this file is purely routing.
 """
 
 import logging
@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Security
 from fastapi.security.api_key import APIKeyHeader
 
-import queries
+import query_engine
 
 load_dotenv()
 
@@ -28,11 +28,11 @@ logger = logging.getLogger("query_api")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Query API — warming up DB connections...")
-    queries.get_cassandra_session()
-    await queries.get_pg_pool()
+    query_engine.get_cassandra_session()
+    await query_engine.get_pg_pool()
     logger.info("Query API ready.")
     yield
-    await queries.close_all()
+    await query_engine.close_all()
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────
@@ -77,7 +77,7 @@ async def search(
              -H "X-API-Key: dev-secret-key-change-in-prod"
     """
     try:
-        result = queries.search_logs(
+        result = query_engine.search_logs(
             service=service,
             start=start,
             end=end,
@@ -107,7 +107,7 @@ async def stats(
              -H "X-API-Key: dev-secret-key-change-in-prod"
     """
     try:
-        return await queries.get_stats(service=service, start=start, end=end)
+        return await query_engine.get_stats(service=service, start=start, end=end)
     except Exception as exc:
         logger.error("Stats failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -123,7 +123,7 @@ async def services(_key: str = Security(verify_key)):
              -H "X-API-Key: dev-secret-key-change-in-prod"
     """
     try:
-        return await queries.get_services()
+        return await query_engine.get_services()
     except Exception as exc:
         logger.error("Services failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))

@@ -18,8 +18,8 @@ from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_
 from pydantic import BaseModel, Field, field_validator
 from starlette.responses import Response
 
-import cassandra_client
 import postgres_client
+import astra_client
 
 # Load .env when running outside Docker (local dev without compose)
 load_dotenv()
