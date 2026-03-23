@@ -45,12 +45,12 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Ingestion API — initializing DB connections...")
     # Cassandra uses a sync driver; warm up the session now so first
     # request doesn't pay the 1-2s connection cost
-    cassandra_client.get_session()
+    astra_client.get_collection()
     await postgres_client.get_pool()
     logger.info("DB connections ready.")
     yield
     logger.info("Shutting down — closing DB connections...")
-    cassandra_client.close()
+    astra_client.close()
     await postgres_client.close()
 
 
