@@ -39,14 +39,14 @@ def get_astra_collection() -> Collection:
 
     endpoint = f"https://{ASTRA_DB_ID}-{ASTRA_DB_REGION}.apps.astra.datastax.com"
     client = DataAPIClient(ASTRA_TOKEN)
-    db = client.get_database(endpoint, keyspace=ASTRA_KEYSPACE)
+    db = client.get_database(endpoint, keyspace=CASSANDRA_KEYSPACE)
     _collection = db.get_collection("logs_by_service_date")
     logger.info("Query API: Astra DB collection ready → %s", endpoint)
     return _collection
 
 
 # Kept for lifespan compatibility with app.py
-def get_astra_session():
+def get_cassandra_session():
     return get_astra_collection()
 
 
@@ -107,19 +107,15 @@ def search_logs(
     if severity:
         filt["severity"] = severity.upper()
 
-    # Date range on the stored ISO string — astrapy supports $gte/$lte on strings
-    if start or end:
-        ts_filter = {}
-        if start:
-            ts_filter["$gte"] = start.isoformat()
-        if end:
-            ts_filter["$lte"] = end.isoformat()
-        filt["timestamp"] = ts_filter
+    # log_date filter — required for efficient partition scans
+    if start:
+        filt["log_date"] = start.date().isoformat()
+    elif end:
+        filt["log_date"] = end.date().isoformat()
 
     if page_token:
         cur_ts, cur_id = decode_cursor(page_token)
-        # Fetch everything before the cursor timestamp (descending order)
-        filt.setdefault("timestamp", {})["$lt"] = cur_ts
+        filt["log_date"] = cur_ts[:10]  # extract date from ISO string
 
     # Fetch limit + 1 to detect next page
     cursor = collection.find(
