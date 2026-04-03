@@ -39,7 +39,7 @@ def get_astra_collection() -> Collection:
 
     endpoint = f"https://{ASTRA_DB_ID}-{ASTRA_DB_REGION}.apps.astra.datastax.com"
     client = DataAPIClient(ASTRA_TOKEN)
-    db = client.get_database(endpoint, keyspace=ASTRA_KEYSPACE)
+    db = client.get_database(endpoint, keyspace=CASSANDRA_KEYSPACE)
     _collection = db.get_collection("logs_by_service_date")
     logger.info("Query API: Astra DB collection ready → %s", endpoint)
     return _collection
@@ -135,7 +135,7 @@ def search_logs(
     next_cursor = None
     if has_next and rows:
         last = rows[-1]
-        next_cursor = encode_cursor(last["timestamp"], last["_id"])
+        next_cursor = encode_cursor(last.get("timestamp", ""), last.get("log_uuid", ""))
 
     return {
         "results": [_doc_to_dict(r) for r in rows],
@@ -186,7 +186,7 @@ def _doc_to_dict(doc: dict) -> dict:
         "service_name": doc.get("service_name"),
         "log_date": doc.get("log_date"),
         "timestamp": doc.get("timestamp"),
-        "id": doc.get("_id"),
+        "log_uuid": doc.get("log_uuid"),
         "severity": doc.get("severity"),
         "message": doc.get("message"),
         "host": doc.get("host"),
