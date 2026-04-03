@@ -45,8 +45,7 @@ def get_astra_collection() -> Collection:
     return _collection
 
 
-# Kept for lifespan compatibility with app.py
-def get_cassandra_session():
+def get_astra_session():
     return get_astra_collection()
 
 
