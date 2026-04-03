@@ -10,3 +10,5 @@ shipper_buffer.jsonl
 
 ingestion_api/secure-connect-bundle.zip
 query_api/secure-connect-bundle.zip
+
+Issues_encountered.md

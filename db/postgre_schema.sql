@@ -3,7 +3,7 @@
 -- PostgreSQL Schema — Distributed Log Analytics
 -- ============================================================
 -- Rationale: Postgres handles relational/aggregate workloads that
--- Cassandra is poorly suited for (GROUP BY, SUM, joins, metadata).
+-- Astra is poorly suited for (GROUP BY, SUM, joins, metadata).
 -- This schema is auto-run by Docker on first container start via
 -- /docker-entrypoint-initdb.d/.
 
@@ -12,7 +12,7 @@
 -- ============================================================
 -- Stores pre-aggregated hourly severity counts per service.
 -- Rationale: Pre-aggregation during ingestion means the stats
--- endpoint is a cheap SELECT, not a live Cassandra scan + COUNT.
+-- endpoint is a cheap SELECT, not a live Astra scan + COUNT.
 -- Upserted by ingestion API using ON CONFLICT DO UPDATE.
 
 CREATE TABLE IF NOT EXISTS log_aggregates (
@@ -33,7 +33,7 @@ CREATE INDEX IF NOT EXISTS idx_agg_hour_bucket ON log_aggregates (hour_bucket);
 -- 2. service_registry
 -- ============================================================
 -- Tracks known services and their last activity.
--- Rationale: Powers GET /services without a Cassandra DISTINCT
+-- Rationale: Powers GET /services without a Astra DISTINCT
 -- scan (which is expensive across all partitions).
 
 CREATE TABLE IF NOT EXISTS service_registry (
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS service_registry (
 -- ============================================================
 -- Optional: lets CLI/dashboard users save and replay queries.
 -- Rationale: Pure metadata — small table, relational, easy to
--- extend (add tags, schedules, etc.) without touching Cassandra.
+-- extend (add tags, schedules, etc.) without touching Astra.
 
 CREATE TABLE IF NOT EXISTS saved_queries (
     id            SERIAL      PRIMARY KEY,

@@ -1,39 +1,25 @@
-# log_shipper/config.yaml
-# All values can be overridden by environment variables (see shipper.py)
-
 ingestion:
-  url: "https://log-analytics-ingestion.onrender.com"
+  url: "https://log-analytics-ingestion.fly.dev"
   api_key: "log-analytics-secret-2026"
-  batch_size: 100
-  retry:
-    max_attempts: 6
-    base_delay: 1
-    max_delay: 60
-
-batching:
-  batch_size: 100                    # Max events per HTTP request
-  flush_interval_secs: 1.0           # Send batch every N seconds even if not full
-  # Rationale: 100 events/request balances HTTP overhead vs memory usage.
-  # At 1000 events/sec, this means 10 requests/sec — well within HTTP limits.
-
-retry:
-  max_retries: 5
-  initial_backoff_secs: 1.0
-  backoff_multiplier: 2.0            # Exponential: 1s → 2s → 4s → 8s → 16s
-  max_backoff_secs: 60.0
-  # Rationale: Cap at 60s to avoid indefinite delays during short outages.
-
-buffer:
-  path: "./shipper_buffer.jsonl"     # Local disk buffer when API unreachable
-  # Rationale: JSONL (one JSON object per line) is easy to append, read
-  # line-by-line, and resume from any point — same idea as Filebeat's registry.
+  timeout_secs: 30
 
 registry:
-  path: "./shipper_registry.json"    # Tracks byte offset per watched file
-  # Rationale: Byte offset lets the shipper resume exactly where it left off
-  # after a restart — no duplicate events, no missed events.
+  path: "shipper_registry.json"
+
+buffer:
+  path: "shipper_buffer.jsonl"
+
+batching:
+  batch_size: 100
+  flush_interval_secs: 5
 
 watch:
-  log_dir: "./logs"                  # Directory to watch for .log files
+  log_dir: "./logs"
   file_pattern: "*.log"
-  poll_interval_secs: 0.5            # How often to check for new lines
+  poll_interval_secs: 2
+
+retry:
+  max_retries: 6
+  initial_backoff_secs: 1
+  backoff_multiplier: 2
+  max_backoff_secs: 60
