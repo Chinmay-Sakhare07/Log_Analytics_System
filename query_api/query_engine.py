@@ -111,6 +111,40 @@ def search_logs(
         filt["log_date"] = start.date().isoformat()
     elif end:
         filt["log_date"] = end.date().isoformat()
+    
+    # Strip timezone info before passing to asyncpg
+    if start and start.tzinfo is not None:
+        start = start.replace(tzinfo=None)
+    if end and end.tzinfo is not None:
+        end = end.replace(tzinfo=None)
+
+    if page_token:
+        cur_ts, cur_id = decode_cursor(page_token)
+        filt["log_date"] = cur_ts[:10]  # extract date from ISO string
+
+    # Fetch limit + 1 to detect next page
+    cursor = collection.find(
+        filt,
+        sort={"timestamp": -1},
+        limit=limit + 1,
+    )
+    rows = list(cursor)
+
+    has_next = len(rows) > limit
+    rows = rows[:limit]
+
+    # Build astrapy filter
+    filt: dict = {"service_name": service}
+
+    if severity:
+        filt["severity"] = severity.upper()
+    
+
+    # log_date filter — required for efficient partition scans
+    if start:
+        filt["log_date"] = start.date().isoformat()
+    elif end:
+        filt["log_date"] = end.date().isoformat()
 
     if page_token:
         cur_ts, cur_id = decode_cursor(page_token)
@@ -148,8 +182,13 @@ async def get_stats(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
 ) -> list[dict]:
-    """Hourly severity counts from Neon PostgreSQL."""
     pool = await get_pg_pool()
+
+    # Strip timezone info before passing to asyncpg
+    if start and start.tzinfo is not None:
+        start = start.replace(tzinfo=None)
+    if end and end.tzinfo is not None:
+        end = end.replace(tzinfo=None)
 
     conditions = []
     params = []

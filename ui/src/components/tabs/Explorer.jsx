@@ -14,7 +14,7 @@ export default function Explorer({ q }) {
     activeSevs, toggleSev, liveKeyword, setLiveKeyword,
     logs, loading, hasNext, prevStack, goNext, goPrev,
     history, replayHistory, tailMode, setTailMode,
-    exportCSV, runQuery,
+    exportCSV, runQuery, queryError,
   } = q;
 
   return (
@@ -120,6 +120,16 @@ export default function Explorer({ q }) {
 
       {/* ── Results ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {queryError && (
+          <div style={{
+            background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 8,
+            padding: "8px 14px", fontSize: 11, color: "#b91c1c",
+            display: "flex", alignItems: "center", gap: 8,
+          }}>
+            <span>⚠</span> {queryError}
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
           <div style={{ fontSize: 11, color: "#6b7280" }}>
             {loading ? "Querying…" : `${logs.length} events`}
