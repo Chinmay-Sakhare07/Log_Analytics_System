@@ -1,0 +1,33 @@
+cat > .github/workflows/keep-warm.yml << 'EOF'
+name: Generate and Ship Logs
+
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  generate-and-ship:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Generate logs
+        run: python log_producer/generate_logs.py --duration 30
+
+      - name: Ship logs
+        env:
+          INGESTION_URL: https://log-analytics-ingestion.fly.dev
+          INGESTION_API_KEY: ${{ secrets.INGESTION_API_KEY }}
+        run: python log_shipper/shipper.py --once
+EOF
