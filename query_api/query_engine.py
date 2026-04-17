@@ -95,84 +95,73 @@ def search_logs(
 ) -> dict:
     """
     Search raw logs from Astra DB.
-    Filters by service_name, optional date range, severity, and keyword.
+    Loops over each date partition in the range for correct multi-day results.
     Cursor pagination via page_token.
     """
+    from datetime import date, timedelta
+
     collection = get_astra_collection()
 
-    # Build astrapy filter
-    filt: dict = {"service_name": service}
-
-    if severity:
-        filt["severity"] = severity.upper()
-
-    # log_date filter — required for efficient partition scans
-    if start:
-        filt["log_date"] = start.date().isoformat()
-    elif end:
-        filt["log_date"] = end.date().isoformat()
-    
-    # Strip timezone info before passing to asyncpg
+    # Strip timezone info before using for date math
     if start and start.tzinfo is not None:
         start = start.replace(tzinfo=None)
     if end and end.tzinfo is not None:
         end = end.replace(tzinfo=None)
 
-    if page_token:
-        cur_ts, cur_id = decode_cursor(page_token)
-        filt["log_date"] = cur_ts[:10]  # extract date from ISO string
-
-    # Fetch limit + 1 to detect next page
-    cursor = collection.find(
-        filt,
-        sort={"timestamp": -1},
-        limit=limit + 1,
-    )
-    rows = list(cursor)
-
-    has_next = len(rows) > limit
-    rows = rows[:limit]
-
-    # Build astrapy filter
-    filt: dict = {"service_name": service}
-
-    if severity:
-        filt["severity"] = severity.upper()
-    
-
-    # log_date filter — required for efficient partition scans
-    if start:
-        filt["log_date"] = start.date().isoformat()
+    # Build list of dates to query across partitions
+    if start and end:
+        dates = []
+        current = start.date()
+        while current <= end.date():
+            dates.append(current.isoformat())
+            current += timedelta(days=1)
+    elif start:
+        dates = [start.date().isoformat()]
     elif end:
-        filt["log_date"] = end.date().isoformat()
+        dates = [end.date().isoformat()]
+    else:
+        from datetime import datetime as dt
+        dates = [dt.utcnow().date().isoformat()]
 
+    # Base filter
+    base_filt: dict = {"service_name": service}
+    if severity:
+        base_filt["severity"] = severity.upper()
+
+    # Cursor overrides date range
     if page_token:
         cur_ts, cur_id = decode_cursor(page_token)
-        filt["log_date"] = cur_ts[:10]  # extract date from ISO string
+        dates = [cur_ts[:10]]
 
-    # Fetch limit + 1 to detect next page
-    cursor = collection.find(
-        filt,
-        sort={"timestamp": -1},
-        limit=limit + 1,
-    )
-    rows = list(cursor)
+    # Query each date partition and merge
+    all_rows = []
+    for log_date in dates:
+        filt = {**base_filt, "log_date": log_date}
+        cursor = collection.find(
+            filt,
+            sort={"timestamp": -1},
+            limit=limit + 1,
+        )
+        all_rows.extend(list(cursor))
 
-    has_next = len(rows) > limit
-    rows = rows[:limit]
+    # Sort merged results by timestamp descending
+    all_rows.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
 
-    # Keyword search — post-fetch in Python (Astra Data API has no LIKE)
+    # Keyword filter — post-fetch since Astra has no LIKE
     if q:
         kw = q.lower()
-        rows = [r for r in rows if kw in r.get("message", "").lower()]
+        all_rows = [r for r in all_rows if kw in r.get("message", "").lower()]
+
+    has_next = len(all_rows) > limit
+    all_rows = all_rows[:limit]
 
     next_cursor = None
-    if has_next and rows:
-        last = rows[-1]
+    if has_next and all_rows:
+        last = all_rows[-1]
         next_cursor = encode_cursor(last.get("timestamp", ""), last.get("log_uuid", ""))
 
     return {
-        "results": [_doc_to_dict(r) for r in rows],
+        "results": [_doc_to_dict(r) for r in all_rows],
         "next_cursor": next_cursor,
     }
 
