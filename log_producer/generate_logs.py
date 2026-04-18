@@ -91,6 +91,31 @@ SERVICES: dict[str, dict] = {
         },
         "severity_weights": {"INFO": 65, "WARN": 20, "ERROR": 10, "DEBUG": 5},
     },
+    "user-service": {
+    "host": "user-host-1",
+    "messages": {
+        "INFO":  [
+            "User profile updated for user_id={uid}",
+            "New user registered: user_id={uid}",
+            "User preferences saved for user_id={uid}",
+        ],
+        "WARN":  [
+            "Profile picture upload slow: {ms}ms for user_id={uid}",
+            "User account near storage limit: user_id={uid}",
+            "Duplicate registration attempt for user_id={uid}",
+        ],
+        "ERROR": [
+            "User profile update failed for user_id={uid}: DB timeout",
+            "Account deletion failed for user_id={uid}",
+            "User data export failed: storage unavailable",
+        ],
+        "DEBUG": [
+            "User session refreshed for user_id={uid}",
+            "Preference cache cleared for user_id={uid}",
+        ],
+    },
+    "severity_weights": {"INFO": 60, "WARN": 25, "ERROR": 10, "DEBUG": 5},
+    }
 }
 
 

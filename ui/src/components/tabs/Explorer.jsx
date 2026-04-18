@@ -1,6 +1,8 @@
 import { useState, Fragment } from "react";
 import { SERVICES, SEVERITIES, SEV_COLOR, SEV_BG, TIME_PRESETS } from "../../lib/constants";
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
 export default function Explorer({ q, theme, t }) {
   const [expandedRow, setExpandedRow] = useState(null);
   const dk = theme === "dark";
@@ -68,14 +70,21 @@ export default function Explorer({ q, theme, t }) {
               }}>{p}</button>
             ))}
           </div>
-          <input type="date" value={dateFrom}
-            onChange={(e) => { setDateFrom(e.target.value); setTimePreset("custom"); }}
-            style={{ ...INPUT, marginBottom: 6, fontSize: 11,
-              colorScheme: dk ? "dark" : "light" }} />
-          <input type="date" value={dateTo}
-            onChange={(e) => { setDateTo(e.target.value); setTimePreset("custom"); }}
-            style={{ ...INPUT, fontSize: 11,
-              colorScheme: dk ? "dark" : "light" }} />
+          <input
+          type="date"
+          value={dateFrom}
+          max={TODAY}
+          onChange={(e) => { setDateFrom(e.target.value); setTimePreset("custom"); }}
+          style={{ ...INPUT, marginBottom: 6, fontSize: 11, colorScheme: dk ? "dark" : "light" }}
+        />
+        <input
+          type="date"
+          value={dateTo}
+          max={TODAY}
+          min={dateFrom || undefined}
+          onChange={(e) => { setDateTo(e.target.value); setTimePreset("custom"); }}
+          style={{ ...INPUT, fontSize: 11, colorScheme: dk ? "dark" : "light" }}
+        />
         </div>
 
         <div style={CARD}>

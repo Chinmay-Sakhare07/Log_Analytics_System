@@ -248,6 +248,28 @@ DEMO_SERVICES = {
             ],
         },
         "weights": {"INFO": 55, "WARN": 25, "ERROR": 12, "DEBUG": 8},
+    },
+    "user-service": {
+    "host": "user-host-1",
+    "messages": {
+        "INFO":  [
+            "User profile updated for user_id={uid}",
+            "New user registered: user_id={uid}",
+            "User preferences saved for user_id={uid}",
+        ],
+        "WARN":  [
+            "Profile picture upload slow: {ms}ms for user_id={uid}",
+            "User account near storage limit: user_id={uid}",
+        ],
+        "ERROR": [
+            "User profile update failed for user_id={uid}: DB timeout",
+            "Account deletion failed for user_id={uid}",
+        ],
+        "DEBUG": [
+            "User session refreshed for user_id={uid}",
+        ],
+    },
+    "weights": {"INFO": 60, "WARN": 25, "ERROR": 10, "DEBUG": 5},
     }
 }
 
