@@ -7,6 +7,10 @@ and upserts hourly aggregates to PostgreSQL.
 import logging
 import os
 import time
+import random
+import uuid
+from datetime import datetime, timezone
+
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -163,3 +167,91 @@ async def metrics():
     if os.getenv("ENABLE_PROMETHEUS", "true").lower() != "true":
         raise HTTPException(status_code=404, detail="Metrics disabled")
     return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+DEMO_SERVICES = {
+    "auth-service": {
+        "host": "auth-host-1",
+        "messages": {
+            "INFO":  ["User login successful for user_id={uid}", "Token issued for user_id={uid}"],
+            "WARN":  ["Failed login attempt for user_id={uid}", "Rate limit approaching for ip={ip}"],
+            "ERROR": ["Authentication failed for user_id={uid}", "Database connection timeout"],
+            "DEBUG": ["Cache hit for session token user_id={uid}"],
+        },
+        "weights": {"INFO": 60, "WARN": 25, "ERROR": 10, "DEBUG": 5},
+    },
+    "payment-service": {
+        "host": "payment-host-1",
+        "messages": {
+            "INFO":  ["Payment processed: txn_id={txn} amount={amt}", "Refund initiated: txn_id={txn}"],
+            "WARN":  ["Payment retry attempt for txn_id={txn}", "Slow gateway response: {ms}ms"],
+            "ERROR": ["Payment FAILED: txn_id={txn} insufficient_funds", "Gateway timeout after {ms}ms"],
+            "DEBUG": ["Gateway selected: stripe for region=us-east"],
+        },
+        "weights": {"INFO": 55, "WARN": 25, "ERROR": 15, "DEBUG": 5},
+    },
+    "api-gateway": {
+        "host": "gateway-host-1",
+        "messages": {
+            "INFO":  ["GET /api/v1/products 200 {ms}ms", "POST /api/v1/orders 201 {ms}ms"],
+            "WARN":  ["GET /api/v1/search 429 rate_limit_exceeded", "Upstream latency high: {ms}ms"],
+            "ERROR": ["POST /api/v1/checkout 500 internal_error", "Circuit breaker OPEN for payment-service"],
+            "DEBUG": ["Request routed to payment-service instance-2"],
+        },
+        "weights": {"INFO": 65, "WARN": 20, "ERROR": 10, "DEBUG": 5},
+    },
+}
+
+
+def _pick_severity(weights: dict) -> str:
+    levels = list(weights.keys())
+    w = list(weights.values())
+    return random.choices(levels, weights=w, k=1)[0]
+
+
+def _make_message(template: str) -> str:
+    return template.format(
+        uid=random.randint(1000, 9999),
+        ip=f"192.168.{random.randint(0,255)}.{random.randint(0,255)}",
+        txn=str(uuid.uuid4())[:8],
+        amt=round(random.uniform(10, 500), 2),
+        ms=random.randint(50, 3000),
+        n=random.randint(1, 5),
+    )
+
+
+@app.post("/demo/generate", tags=["Demo"])
+async def demo_generate(
+    count: int = 20,
+    _key: str = Security(verify_api_key),
+):
+    """Generate fake log events and ingest them directly."""
+    events = []
+    now = datetime.now(timezone.utc)
+
+    for _ in range(count):
+        service_name = random.choice(list(DEMO_SERVICES.keys()))
+        svc = DEMO_SERVICES[service_name]
+        severity = _pick_severity(svc["weights"])
+        template = random.choice(svc["messages"][severity])
+
+        events.append({
+            "timestamp": now,
+            "service": service_name,
+            "severity": severity,
+            "message": _make_message(template),
+            "host": svc["host"],
+            "metadata": {"source": "demo_generator"},
+        })
+
+    event_dicts = [e for e in events]
+    # Convert datetime to isoformat for astra_client
+    for e in event_dicts:
+        e["timestamp"] = e["timestamp"]
+
+    try:
+        written = astra_client.insert_log_batch(event_dicts)
+        await postgres_client.upsert_aggregates(event_dicts)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return {"status": "ok", "generated": written}
