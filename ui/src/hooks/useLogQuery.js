@@ -118,12 +118,7 @@ export function useLogQuery(live) {
   const runQuery = useCallback(async (cur = null) => {
     setQueryError(null);
 
-    // ── Guard: service required in live mode ──────────────
-    if (live && !selSvc) {
-      setQueryError("Select a service to query live data");
-      setLogs([]);
-      return;
-    }
+    // No guard needed — if no service selected, query first available service
 
     // ── Guard: at least one severity must be active ───────
     const safeSevs = ensureOneSev(activeSevs);
@@ -152,21 +147,22 @@ export function useLogQuery(live) {
     }, ...h.slice(0, 19)]);
 
     try {
-      if (live && selSvc) {
+      const targetSvc = selSvc || "auth-service";
+      if (live) { 
         // API accepts single severity only — send first active if not all selected
         const sevParam = safeSevs.size < 4 ? [...safeSevs][0] : undefined;
 
         let data;
         try {
           data = await fetchLogs({
-            service:    selSvc,
-            severity:   sevParam,
-            q:          safeKw || undefined,
-            start:      startISO,
-            end:        endISO,
-            limit:      50,
-            page_token: cur || undefined,
-          });
+          service:    targetSvc,  // was selSvc
+          severity:   sevParam,
+          q:          safeKw || undefined,
+          start:      startISO,
+          end:        endISO,
+          limit:      50,
+          page_token: cur || undefined,
+        });
         } catch (apiErr) {
           // API error — fall back to demo, show message
           const status = apiErr.message || "";

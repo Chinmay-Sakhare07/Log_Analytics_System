@@ -199,6 +199,56 @@ DEMO_SERVICES = {
         },
         "weights": {"INFO": 65, "WARN": 20, "ERROR": 10, "DEBUG": 5},
     },
+    "notification-service": {
+    "host": "notification-host-1",
+    "messages": {
+        "INFO":  [
+            "Email sent to user_id={uid}, template=welcome",
+            "Push notification delivered to device_id={uid}",
+            "SMS dispatched to user_id={uid}, status=delivered",
+        ],
+        "WARN":  [
+            "Email bounce detected for user_id={uid}",
+            "Push notification delivery delayed {ms}ms",
+            "SMS rate limit approaching for region=us-east",
+        ],
+        "ERROR": [
+            "Email delivery failed for user_id={uid}: SMTP timeout",
+            "Push notification rejected: invalid device token",
+            "Notification queue overflow, dropping events",
+        ],
+        "DEBUG": [
+            "Notification template rendered for user_id={uid}",
+            "Webhook callback received for notification_id={uid}",
+        ],
+    },
+    "weights": {"INFO": 60, "WARN": 25, "ERROR": 10, "DEBUG": 5},
+    },
+    "report-service": {
+        "host": "report-host-1",
+        "messages": {
+            "INFO":  [
+                "Report generated: type=monthly, user_id={uid}, rows={n}",
+                "CSV export completed for user_id={uid}, size={ms}kb",
+                "Scheduled report dispatched to user_id={uid}",
+            ],
+            "WARN":  [
+                "Report generation slow: {ms}ms for user_id={uid}",
+                "Large dataset detected: {n} rows, consider pagination",
+                "Report cache miss for user_id={uid}, regenerating",
+            ],
+            "ERROR": [
+                "Report generation failed for user_id={uid}: timeout",
+                "PDF rendering error for report_id={uid}",
+                "Report storage write failed: disk quota exceeded",
+            ],
+            "DEBUG": [
+                "Report query plan optimized for user_id={uid}",
+                "Cache hit for report_id={uid}",
+            ],
+        },
+        "weights": {"INFO": 55, "WARN": 25, "ERROR": 12, "DEBUG": 8},
+    }
 }
 
 
