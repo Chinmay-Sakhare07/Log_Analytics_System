@@ -3,7 +3,7 @@ export const QUERY_API     = "https://log-analytics-query.fly.dev";
 export const API_KEY       = "log-analytics-secret-2026";
 
 export const MAX_ATTEMPTS  = 5;
-export const POLL_INTERVAL = 7000;
+export const POLL_INTERVAL = 2750;
 
 export const SERVICES = [
   "auth-service",
