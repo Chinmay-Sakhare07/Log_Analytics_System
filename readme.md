@@ -14,7 +14,7 @@ The only way I could think to answer those questions properly was to build one.
 
 LogBase started as that experiment. It became a full pipeline — a file tailer that ships logs with exponential backoff and disk buffering, a dual-database storage layer that separates raw events from aggregates, two FastAPI services that handle ingestion and querying, and a React dashboard that ties it all together. Every architectural decision in here was made after hitting a real problem, not before.
 
-The deployment alone produced nine distinct failures. Port restrictions on hosting platforms, SSL bundle management, partial find-and-replace bugs that survived code review, DNS strings with accidental suffixes, cloud machines that go to sleep mid-demo. All of it is documented in [Issues_encountered.md](./Issues_encountered.md) because that is where the real learning happened.
+The deployment alone produced nine distinct failures. Port restrictions on hosting platforms, SSL bundle management, partial find-and-replace bugs that survived code review, DNS strings with accidental suffixes, cloud machines that go to sleep mid-demo. 
 
 ---
 
@@ -371,8 +371,6 @@ log-analytics-system/
 ## Deployment Challenges
 
 Getting this running on free cloud tiers was not straightforward. Nine separate problems came up between local development and a working production deployment — port restrictions blocking Cassandra connections, SSL bundle management in containerised environments, a find-and-replace that missed one occurrence, Fly.io machines sleeping mid-demo, and a UUID with an accidental suffix copied from a dashboard.
-
-All of it is documented in [Issues_encountered.md](./Issues_encountered.md). Worth reading if you are trying to deploy something similar.
 
 ---
 
