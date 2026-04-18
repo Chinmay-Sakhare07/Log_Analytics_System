@@ -98,19 +98,21 @@ export default function Dashboard({ live, coldStart }) {
       transition: "background 0.2s, color 0.2s",
     }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap');
-        @keyframes newRow  { from{background:#dcfce7} to{background:transparent} }
-        @keyframes slideIn { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:translateY(0)} }
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-track { background: ${t.scrollTrack}; }
-        ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
-        input:focus, select:focus { border-color: #6366f1 !important; outline: none !important; box-shadow: 0 0 0 3px ${dk ? "#312e81" : "#e0e7ff"} !important; }
-        .tab-btn:hover  { color: ${t.text} !important; }
-        .row-hover:hover { background: ${t.hoverBg} !important; }
-        .pill-btn:hover { opacity: 0.8; }
-        .icon-btn:hover { background: ${dk ? "#2a2a2a" : "#f3f4f6"} !important; }
-      `}</style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&display=swap');
+  @keyframes newRow  { from{background:#dcfce7} to{background:transparent} }
+  @keyframes slideIn { from{opacity:0;transform:translateY(3px)} to{opacity:1;transform:translateY(0)} }
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: ${t.scrollTrack}; }
+  ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
+  input:focus, select:focus { border-color: #6366f1 !important; outline: none !important; box-shadow: 0 0 0 3px ${dk ? "#312e81" : "#e0e7ff"} !important; }
+  .tab-btn:hover  { color: ${t.text} !important; }
+  .row-hover:hover { background: ${t.hoverBg} !important; }
+  .pill-btn:hover { opacity: 0.8; }
+  .icon-btn:hover { background: ${dk ? "#2a2a2a" : "#f3f4f6"} !important; }
+  .system-grid { grid-template-columns: minmax(0, 1fr) 300px; }
+  @media (max-width: 768px) { .system-grid { grid-template-columns: 1fr !important; } }
+`}</style>
 
       {/* Theme popup */}
       {showThemePopup && <ThemePopup onChoose={chooseTheme} />}
