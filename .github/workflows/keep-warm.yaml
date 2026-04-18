@@ -1,10 +1,9 @@
-cat > .github/workflows/keep-warm.yml << 'EOF'
 name: Generate and Ship Logs
 
 on:
   schedule:
-    - cron: '0 9 * * *'
-  workflow_dispatch:
+    - cron: '0 9 * * *'  # Runs every day at 9am UTC
+  workflow_dispatch:       # Also allows manual trigger from GitHub UI
 
 jobs:
   generate-and-ship:
@@ -30,4 +29,3 @@ jobs:
           INGESTION_URL: https://log-analytics-ingestion.fly.dev
           INGESTION_API_KEY: ${{ secrets.INGESTION_API_KEY }}
         run: python log_shipper/shipper.py --once
-EOF
